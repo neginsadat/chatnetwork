@@ -1,0 +1,50 @@
+import socket
+import threading
+
+clients = []
+
+def broadcast(message, sender_socket):
+    for client in clients:
+        if client != sender_socket:
+            try:
+                client.send(message)
+            except:
+                client.close()
+                clients.remove(client)
+
+def handle_client(client_socket):
+    while True:
+        try:
+            message = client_socket.recv(1024)
+            if not message:
+                break
+            if message.startswith(b'FILE'):
+                file_name = message[4:].decode('utf-8')
+                with open(file_name, 'wb') as f:
+                    while True:
+                        data = client_socket.recv(1024)
+                        if not data or data == b'EOF':
+                            break
+                        f.write(data)
+                broadcast(f'File {file_name} received.'.encode('utf-8'), client_socket)
+            else:
+                broadcast(message, client_socket)
+        except:
+            client_socket.close()
+            clients.remove(client_socket)
+            break
+
+def server_program():
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind(('0.0.0.0', 5001))
+    server_socket.listen(5)
+    print("Server started, waiting for clients...")
+
+    while True:
+        client_socket, addr = server_socket.accept()
+        print(f"Connection from {addr}")
+        clients.append(client_socket)
+        threading.Thread(target=handle_client, args=(client_socket,)).start()
+
+if __name__ == '__main__':
+    server_program()
